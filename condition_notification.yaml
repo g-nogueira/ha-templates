@@ -43,14 +43,14 @@ blueprint:
 trigger:
   - platform: numeric_state
     entity_id: !input monitored_sensor
-    above: "{{ threshold_value if condition_type == 'above' }}"
-    below: "{{ threshold_value if condition_type == 'below' }}"
+    above: "{{ threshold_value if condition_type == 'above' else 999999999 }}"
+    below: "{{ threshold_value if condition_type == 'below' else -999999999 }}"
     
 condition:
   - condition: template
     value_template: >-
       {% if condition_type == 'equal' %}
-        {{ states(monitored_sensor) | float == threshold_value | float }}
+        {{ states(trigger.entity_id) | float == threshold_value | float }}
       {% else %}
         true
       {% endif %}
