@@ -1,0 +1,70 @@
+blueprint:
+  name: Condition-Based Device Notification
+  description: Send a notification to mobile devices when a specified condition is met
+  domain: automation
+  input:
+    monitored_sensor:
+      name: Sensor to Monitor
+      description: Select the sensor you want to monitor
+      selector:
+        entity:
+          domain: sensor
+    condition_type:
+      name: Condition Type
+      description: Select how to evaluate the sensor
+      default: above
+      selector:
+        select:
+          options:
+            - above
+            - below
+            - equal
+    threshold_value:
+      name: Threshold Value
+      description: The value that triggers the notification
+      selector:
+        number:
+          mode: box
+          step: 0.1
+    notify_devices:
+      name: Notification Devices
+      description: Select which mobile devices to notify
+      selector:
+        device:
+          integration: mobile_app
+          multiple: true
+    notification_message:
+      name: Notification Message
+      description: Message to send when condition is met
+      selector:
+        text:
+          multiline: true
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input monitored_sensor
+    above: "{{ threshold_value if condition_type == 'above' }}"
+    below: "{{ threshold_value if condition_type == 'below' }}"
+    
+condition:
+  - condition: template
+    value_template: >-
+      {% if condition_type == 'equal' %}
+        {{ states(monitored_sensor) | float == threshold_value | float }}
+      {% else %}
+        true
+      {% endif %}
+
+action:
+  - repeat:
+      for_each: "{{ notify_devices }}"
+      sequence:
+        - service: notify.mobile_app_{{ repeat.item | regex_replace('[^a-zA-Z0-9_]', '_') | lower }}
+          data:
+            message: !input notification_message
+            title: "Sensor Alert"
+            data:
+              priority: high
+              ttl: 0
+              importance: high
+              channel: sensor_alerts
