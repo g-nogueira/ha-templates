@@ -47,11 +47,32 @@ variables:
     {% else %}
       []
     {% endif %}
+  debug_info: >-
+    {% set info = {
+      'notify_devices': notify_devices,
+      'device_names': notify_names
+    } %}
+    {{ info | tojson }}
 
 action:
+  - service: logbook.log
+    data:
+      name: "Debug Info"
+      message: "Notify devices: {{ notify_devices }}, Generated names: {{ notify_names }}"
+  
+  - service: logbook.log
+    data:
+      name: "Debug Raw"
+      message: "{{ debug_info }}"
+
   - repeat:
       for_each: "{{ notify_names }}"
       sequence:
+        - service: logbook.log
+          data:
+            name: "Attempting notification"
+            message: "Trying to notify service: notify.{{ repeat.item }}"
+            
         - service: "notify.{{ repeat.item }}"
           data:
             title: "Sensor Alert"
