@@ -9,16 +9,6 @@ blueprint:
       selector:
         entity:
           domain: sensor
-    condition_type:
-      name: Condition Type
-      description: Select how to evaluate the sensor
-      default: above
-      selector:
-        select:
-          options:
-            - above
-            - below
-            - equal
     threshold_value:
       name: Threshold Value
       description: The value that triggers the notification
@@ -40,24 +30,15 @@ blueprint:
         text:
           multiline: true
 
+# Simple trigger that watches for value above threshold
 trigger:
   - platform: numeric_state
     entity_id: !input monitored_sensor
-    above: "{{ threshold_value if condition_type == 'above' else 999999999 }}"
-    below: "{{ threshold_value if condition_type == 'below' else -999999999 }}"
-    
-condition:
-  - condition: template
-    value_template: >-
-      {% if condition_type == 'equal' %}
-        {{ states(trigger.entity_id) | float == threshold_value | float }}
-      {% else %}
-        true
-      {% endif %}
+    above: !input threshold_value
 
 action:
   - repeat:
-      for_each: "{{ notify_devices }}"
+      for_each: !input notify_devices
       sequence:
         - service: notify.mobile_app_{{ repeat.item | regex_replace('[^a-zA-Z0-9_]', '_') | lower }}
           data:
