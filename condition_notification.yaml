@@ -468,3 +468,6 @@ action:
                   importance: "high" 
                   channel: "escalation"
                   tag: "escalation_{{ alarm_name | slugify }}"
+
+mode: queued
+max: 10
