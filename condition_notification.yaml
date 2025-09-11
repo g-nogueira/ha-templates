@@ -207,61 +207,19 @@ blueprint:
 
 # === TRIGGER CONFIGURATION ===
 trigger:
-  - platform: template
-    value_template: >-
-      {% set current_value = states(monitored_entity) | float(0) %}
-      {% set threshold = threshold_value | float(0) %}
-      {% set threshold_high = threshold_value_high | float(0) %}
-      {% set condition = condition_type %}
-      
-      {% if condition == 'above' %}
-        {{ current_value > threshold }}
-      {% elif condition == 'below' %}
-        {{ current_value < threshold }}
-      {% elif condition == 'between' %}
-        {{ threshold <= current_value <= threshold_high }}
-      {% elif condition == 'outside' %}
-        {{ current_value < threshold or current_value > threshold_high }}
-      {% elif condition == 'equal' %}
-        {{ current_value == threshold }}
-      {% elif condition == 'not_equal' %}
-        {{ current_value != threshold }}
-      {% elif condition == 'changed' %}
-        {{ trigger.to_state.state != trigger.from_state.state }}
-      {% else %}
-        false
-      {% endif %}
+  # Main alarm trigger - fires on any state change of the monitored entity
+  - platform: state
+    entity_id: !input monitored_entity
+    id: alarm_trigger
     for:
       minutes: !input evaluation_period
 
-  # OK notification trigger
-  - platform: template
-    value_template: >-
-      {% if enable_ok_notifications %}
-        {% set current_value = states(monitored_entity) | float(0) %}
-        {% set threshold = threshold_value | float(0) %}
-        {% set threshold_high = threshold_value_high | float(0) %}
-        {% set condition = condition_type %}
-        
-        {% if condition == 'above' %}
-          {{ current_value <= threshold }}
-        {% elif condition == 'below' %}
-          {{ current_value >= threshold }}
-        {% elif condition == 'between' %}
-          {{ current_value < threshold or current_value > threshold_high }}
-        {% elif condition == 'outside' %}
-          {{ threshold <= current_value <= threshold_high }}
-        {% elif condition == 'equal' %}
-          {{ current_value != threshold }}
-        {% elif condition == 'not_equal' %}
-          {{ current_value == threshold }}
-        {% else %}
-          false
-        {% endif %}
-      {% else %}
-        false
-      {% endif %}
+  # OK notification trigger - also fires on state change but with different condition
+  - platform: state  
+    entity_id: !input monitored_entity
     id: ok_trigger
+    for:
+      minutes: !input evaluation_period
 
 # === VARIABLES ===
 variables:
@@ -342,8 +300,63 @@ variables:
 
 # === CONDITION ===
 condition:
-  - condition: template
-    value_template: "{{ not in_maintenance }}"
+  - condition: and
+    conditions:
+      # Check maintenance mode
+      - condition: template
+        value_template: "{{ not in_maintenance }}"
+      
+      # Check if this is the correct trigger type (alarm vs OK)
+      - condition: template
+        value_template: >-
+          {% set current_value = trigger.to_state.state | float(0) %}
+          {% set threshold = threshold_value | float(0) %}
+          {% set threshold_high = threshold_value_high | float(0) %}
+          {% set condition = condition_type %}
+          
+          {% if trigger.id == 'ok_trigger' %}
+            {# This is an OK notification trigger #}
+            {% if enable_ok_notifications %}
+              {% if condition == 'above' %}
+                {{ current_value <= threshold }}
+              {% elif condition == 'below' %}
+                {{ current_value >= threshold }}
+              {% elif condition == 'between' %}
+                {{ current_value < threshold or current_value > threshold_high }}
+              {% elif condition == 'outside' %}
+                {{ threshold <= current_value <= threshold_high }}
+              {% elif condition == 'equal' %}
+                {{ current_value != threshold }}
+              {% elif condition == 'not_equal' %}
+                {{ current_value == threshold }}
+              {% elif condition == 'changed' %}
+                {{ trigger.to_state.state != trigger.from_state.state }}
+              {% else %}
+                false
+              {% endif %}
+            {% else %}
+              false
+            {% endif %}
+          {% else %}
+            {# This is an alarm trigger #}
+            {% if condition == 'above' %}
+              {{ current_value > threshold }}
+            {% elif condition == 'below' %}
+              {{ current_value < threshold }}
+            {% elif condition == 'between' %}
+              {{ threshold <= current_value <= threshold_high }}
+            {% elif condition == 'outside' %}
+              {{ current_value < threshold or current_value > threshold_high }}
+            {% elif condition == 'equal' %}
+              {{ current_value == threshold }}
+            {% elif condition == 'not_equal' %}
+              {{ current_value != threshold }}
+            {% elif condition == 'changed' %}
+              {{ trigger.to_state.state != trigger.from_state.state }}
+            {% else %}
+              false
+            {% endif %}
+          {% endif %}
 
 # === ACTIONS ===
 action:
