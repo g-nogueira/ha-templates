@@ -207,17 +207,9 @@ blueprint:
 
 # === TRIGGER CONFIGURATION ===
 trigger:
-  # Main alarm trigger - fires on any state change of the monitored entity
+  # Single trigger that fires on any state change of the monitored entity
   - platform: state
     entity_id: !input monitored_entity
-    id: alarm_trigger
-    for:
-      minutes: !input evaluation_period
-
-  # OK notification trigger - also fires on state change but with different condition
-  - platform: state  
-    entity_id: !input monitored_entity
-    id: ok_trigger
     for:
       minutes: !input evaluation_period
 
@@ -267,16 +259,73 @@ variables:
       []
     {% endif %}
 
-  # Determine alert state
+  # Determine if current state triggers an alarm
+  is_alarm_condition: >-
+    {% set current_value = trigger.to_state.state | float(0) %}
+    {% set threshold = threshold_value | float(0) %}
+    {% set threshold_high = threshold_value_high | float(0) %}
+    {% set condition = condition_type %}
+    
+    {% if condition == 'above' %}
+      {{ current_value > threshold }}
+    {% elif condition == 'below' %}
+      {{ current_value < threshold }}
+    {% elif condition == 'between' %}
+      {{ threshold <= current_value <= threshold_high }}
+    {% elif condition == 'outside' %}
+      {{ current_value < threshold or current_value > threshold_high }}
+    {% elif condition == 'equal' %}
+      {{ current_value == threshold }}
+    {% elif condition == 'not_equal' %}
+      {{ current_value != threshold }}
+    {% elif condition == 'changed' %}
+      {{ trigger.to_state.state != trigger.from_state.state }}
+    {% else %}
+      {{ false }}
+    {% endif %}
+
+  # Determine if this was previously in alarm state
+  was_alarm_condition: >-
+    {% if trigger.from_state %}
+      {% set previous_value = trigger.from_state.state | float(0) %}
+      {% set threshold = threshold_value | float(0) %}
+      {% set threshold_high = threshold_value_high | float(0) %}
+      {% set condition = condition_type %}
+      
+      {% if condition == 'above' %}
+        {{ previous_value > threshold }}
+      {% elif condition == 'below' %}
+        {{ previous_value < threshold }}
+      {% elif condition == 'between' %}
+        {{ threshold <= previous_value <= threshold_high }}
+      {% elif condition == 'outside' %}
+        {{ previous_value < threshold or previous_value > threshold_high }}
+      {% elif condition == 'equal' %}
+        {{ previous_value == threshold }}
+      {% elif condition == 'not_equal' %}
+        {{ previous_value != threshold }}
+      {% elif condition == 'changed' %}
+        {{ false }}  # For 'changed', we always notify
+      {% else %}
+        {{ false }}
+      {% endif %}
+    {% else %}
+      {{ false }}
+    {% endif %}
+
+  # Determine what type of notification this should be
   is_alert_state: >-
-    {{ trigger.id != 'ok_trigger' }}
+    {{ is_alarm_condition }}
+  
+  is_recovery_state: >-
+    {{ was_alarm_condition and not is_alarm_condition and enable_ok_notifications }}
   
   # Check maintenance mode
   in_maintenance: >-
     {% if enable_maintenance_mode and maintenance_entity %}
-      {{ is_state(maintenance_entity, 'on') | bool }}
+      {{ is_state(maintenance_entity, 'on') }}
     {% else %}
-      {{ false }}
+      false
     {% endif %}
 
   # Severity configuration
@@ -306,57 +355,9 @@ condition:
       - condition: template
         value_template: "{{ not in_maintenance }}"
       
-      # Check if this is the correct trigger type (alarm vs OK)
+      # Check if this should trigger a notification (either alarm or recovery)
       - condition: template
-        value_template: >-
-          {% set current_value = trigger.to_state.state | float(0) %}
-          {% set threshold = threshold_value | float(0) %}
-          {% set threshold_high = threshold_value_high | float(0) %}
-          {% set condition = condition_type %}
-          
-          {% if trigger.id == 'ok_trigger' %}
-            {# This is an OK notification trigger #}
-            {% if enable_ok_notifications %}
-              {% if condition == 'above' %}
-                {{ current_value <= threshold }}
-              {% elif condition == 'below' %}
-                {{ current_value >= threshold }}
-              {% elif condition == 'between' %}
-                {{ current_value < threshold or current_value > threshold_high }}
-              {% elif condition == 'outside' %}
-                {{ threshold <= current_value <= threshold_high }}
-              {% elif condition == 'equal' %}
-                {{ current_value != threshold }}
-              {% elif condition == 'not_equal' %}
-                {{ current_value == threshold }}
-              {% elif condition == 'changed' %}
-                {{ trigger.to_state.state != trigger.from_state.state }}
-              {% else %}
-                false
-              {% endif %}
-            {% else %}
-              false
-            {% endif %}
-          {% else %}
-            {# This is an alarm trigger #}
-            {% if condition == 'above' %}
-              {{ current_value > threshold }}
-            {% elif condition == 'below' %}
-              {{ current_value < threshold }}
-            {% elif condition == 'between' %}
-              {{ threshold <= current_value <= threshold_high }}
-            {% elif condition == 'outside' %}
-              {{ current_value < threshold or current_value > threshold_high }}
-            {% elif condition == 'equal' %}
-              {{ current_value == threshold }}
-            {% elif condition == 'not_equal' %}
-              {{ current_value != threshold }}
-            {% elif condition == 'changed' %}
-              {{ trigger.to_state.state != trigger.from_state.state }}
-            {% else %}
-              false
-            {% endif %}
-          {% endif %}
+        value_template: "{{ is_alert_state or is_recovery_state }}"
 
 # === ACTIONS ===
 action:
@@ -367,9 +368,11 @@ action:
       message: >-
         {% if is_alert_state %}
           🚨 ALARM: {{ monitored_entity }} triggered {{ condition_type }} {{ threshold_value }}. 
-          Current value: {{ states(monitored_entity) }}. Severity: {{ severity_level | upper }}
+          Current value: {{ trigger.to_state.state }}. Severity: {{ severity_level | upper }}
+        {% elif is_recovery_state %}
+          ✅ OK: {{ monitored_entity }} returned to normal. Current value: {{ trigger.to_state.state }}
         {% else %}
-          ✅ OK: {{ monitored_entity }} returned to normal. Current value: {{ states(monitored_entity) }}
+          ℹ️ INFO: {{ monitored_entity }} state changed to {{ trigger.to_state.state }}
         {% endif %}
       entity_id: "{{ monitored_entity }}"
 
@@ -481,6 +484,3 @@ action:
                   importance: "high" 
                   channel: "escalation"
                   tag: "escalation_{{ alarm_name | slugify }}"
-
-mode: queued
-max: 10
