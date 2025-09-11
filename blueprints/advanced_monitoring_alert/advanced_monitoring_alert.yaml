@@ -8,13 +8,13 @@ blueprint:
     # === MONITORING CONFIGURATION ===
     monitored_entity:
       name: Entity to Monitor
-      description: Select the entity (sensor, binary_sensor, etc.) to monitor (Variable: monitored_entity)
+      description: 'Select the entity (sensor, binary_sensor, etc.) to monitor (Variable: monitored_entity)'
       selector:
         entity:
     
     alarm_name:
       name: Alarm Name
-      description: Human-readable name for this alarm (Variable: alarm_name)
+      description: 'Human-readable name for this alarm (Variable: alarm_name)'
       default: "Sensor Alert"
       selector:
         text:
@@ -22,7 +22,7 @@ blueprint:
     # === CONDITION CONFIGURATION ===
     condition_type:
       name: Condition Type
-      description: Type of condition to evaluate (Variable: condition_type)
+      description: 'Type of condition to evaluate (Variable: condition_type)'
       default: "above"
       selector:
         select:
@@ -44,7 +44,7 @@ blueprint:
 
     threshold_value:
       name: Threshold Value
-      description: Primary threshold value for comparison (Variable: threshold_value)
+      description: 'Primary threshold value for comparison (Variable: threshold_value)'
       selector:
         number:
           mode: box
@@ -52,7 +52,7 @@ blueprint:
           
     threshold_value_high:
       name: High Threshold (for range conditions)
-      description: Upper threshold for between/outside range conditions (Variable: threshold_value_high)
+      description: 'Upper threshold for between/outside range conditions (Variable: threshold_value_high)'
       default: 100
       selector:
         number:
@@ -62,7 +62,7 @@ blueprint:
     # === EVALUATION CONFIGURATION ===
     evaluation_period:
       name: Evaluation Period (minutes)
-      description: How long condition must persist before triggering (0 = immediate) (Variable: evaluation_period)
+      description: 'How long condition must persist before triggering (0 = immediate) (Variable: evaluation_period)'
       default: 0
       selector:
         number:
@@ -75,7 +75,7 @@ blueprint:
     # === SEVERITY AND ESCALATION ===
     severity_level:
       name: Severity Level
-      description: Alert severity level (Variable: severity_level)
+      description: 'Alert severity level (Variable: severity_level)'
       default: "medium"
       selector:
         select:
@@ -93,14 +93,14 @@ blueprint:
 
     enable_escalation:
       name: Enable Escalation
-      description: Escalate to additional contacts after specified delay (Variable: enable_escalation)
+      description: 'Escalate to additional contacts after specified delay (Variable: enable_escalation)'
       default: false
       selector:
         boolean:
 
     escalation_delay:
       name: Escalation Delay (minutes)
-      description: Time to wait before escalating (Variable: escalation_delay)
+      description: 'Time to wait before escalating (Variable: escalation_delay)'
       default: 15
       selector:
         number:
@@ -113,7 +113,7 @@ blueprint:
     # === NOTIFICATION CONFIGURATION ===
     primary_notify_devices:
       name: Primary Notification Devices
-      description: Primary mobile devices to notify immediately (Variable: primary_notify_devices)
+      description: 'Primary mobile devices to notify immediately (Variable: primary_notify_devices)'
       selector:
         device:
           integration: mobile_app
@@ -121,7 +121,7 @@ blueprint:
 
     escalation_notify_devices:
       name: Escalation Notification Devices
-      description: Additional devices to notify during escalation (Variable: escalation_notify_devices)
+      description: 'Additional devices to notify during escalation (Variable: escalation_notify_devices)'
       default: []
       selector:
         device:
