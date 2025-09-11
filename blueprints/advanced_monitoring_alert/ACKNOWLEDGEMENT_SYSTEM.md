@@ -2,7 +2,7 @@
 
 Complete enterprise-grade monitoring system for Home Assistant with acknowledgeable notifications, escalation policies, and maintenance windows.
 
-## 🏗️ **SysFor high-volume environments, you can create multiple handlers:
+## 🏗️ For high-volume environments, you can create multiple handlers:
 ```yaml
 # Create separate helpers for different systems
 input_text:
@@ -12,7 +12,7 @@ input_text:
   application_acknowledgements:
     max: 255
     initial: "{}"
-```cture**
+```
 
 This monitoring system consists of **three blueprints** that work together:
 
@@ -344,3 +344,4 @@ When contributing:
 ---
 
 *Built with ❤️ for enterprise Home Assistant deployments*
+
