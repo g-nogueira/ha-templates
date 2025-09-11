@@ -274,9 +274,9 @@ variables:
   # Check maintenance mode
   in_maintenance: >-
     {% if enable_maintenance_mode and maintenance_entity %}
-      {{ is_state(maintenance_entity, 'on') }}
+      {{ is_state(maintenance_entity, 'on') | bool }}
     {% else %}
-      false
+      {{ false }}
     {% endif %}
 
   # Severity configuration
