@@ -209,7 +209,7 @@ blueprint:
       description: |
         The input_text helper that stores acknowledgement state.
         Create helper: Settings → Devices & Services → Helpers → Text
-        Name: global_alarm_acknowledgements, Max: 8192, Initial: {}
+        Name: global_alarm_acknowledgements, Max: 255, Initial: {}
       default: "input_text.global_alarm_acknowledgements"
       selector:
         entity:
@@ -434,7 +434,7 @@ action:
             Please create the helper:
             Settings → Devices & Services → Helpers → Create Helper → Text
             Name: global_alarm_acknowledgements
-            Max length: 8192
+            Max length: 255
             Initial value: {}
             
             Or disable acknowledgements for this alarm.

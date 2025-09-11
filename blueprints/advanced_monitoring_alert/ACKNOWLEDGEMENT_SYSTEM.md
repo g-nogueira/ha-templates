@@ -2,7 +2,17 @@
 
 Complete enterprise-grade monitoring system for Home Assistant with acknowledgeable notifications, escalation policies, and maintenance windows.
 
-## 🏗️ **System Architecture**
+## 🏗️ **SysFor high-volume environments, you can create multiple handlers:
+```yaml
+# Create separate helpers for different systems
+input_text:
+  infrastructure_acknowledgements:
+    max: 255
+    initial: "{}"
+  application_acknowledgements:
+    max: 255
+    initial: "{}"
+```cture**
 
 This monitoring system consists of **three blueprints** that work together:
 
@@ -14,6 +24,8 @@ This monitoring system consists of **three blueprints** that work together:
 
 ### **Step 1: Create Required Helper**
 
+> ⚠️ **Storage Limitation**: Home Assistant input_text helpers are limited to 255 characters. This means you can store approximately 3-5 acknowledgements simultaneously. For high-volume environments, consider using multiple helpers for different alarm categories or shorter alarm names.
+
 Create a single input_text helper that will store acknowledgement state for ALL alarms:
 
 #### Via UI:
@@ -22,7 +34,7 @@ Create a single input_text helper that will store acknowledgement state for ALL 
 3. Configure:
    - **Name**: `Global Alarm Acknowledgements`
    - **Entity ID**: `input_text.global_alarm_acknowledgements`
-   - **Maximum length**: `8192`
+   - **Maximum length**: `255`
    - **Initial value**: `{}`
 
 #### Via YAML (configuration.yaml):
@@ -30,7 +42,7 @@ Create a single input_text helper that will store acknowledgement state for ALL 
 input_text:
   global_alarm_acknowledgements:
     name: "Global Alarm Acknowledgements"
-    max: 8192
+    max: 255
     initial: "{}"
     icon: mdi:bell-check
 ```
@@ -187,10 +199,11 @@ use_blueprint:
 
 ### **Helper Overflow**
 
-If the helper reaches the 8192 character limit:
+If the helper reaches the 255 character limit:
 - Check Cleanup automation is running
-- Reduce retention period
+- Reduce retention period  
 - Manually clear helper: Set value to `{}`
+- Consider reducing alarm names to save space
 
 ### **Escalations Still Happening**
 

@@ -60,7 +60,7 @@ action:
             Please create an input_text helper named "global_alarm_acknowledgements" in:
             Settings → Devices & Services → Helpers → Create Helper → Text
             
-            Max length: 8192 characters
+            Max length: 255 characters
             Initial value: {}
           notification_id: "missing_ack_helper"
       - stop: "Acknowledgement helper not found"
