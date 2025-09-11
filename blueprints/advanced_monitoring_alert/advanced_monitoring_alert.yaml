@@ -304,13 +304,13 @@ variables:
           {% set is_expired = (now() - ack_time).total_seconds() > (timeout_minutes * 60) %}
           {{ not is_expired }}
         {% else %}
-          false
+          {{ false }}
         {% endif %}
       {% else %}
-        false
+        {{ false }}
       {% endif %}
     {% else %}
-      false
+      {{ false }}
     {% endif %}
 
   # Check if helper exists and warn if acknowledgements are enabled but helper is missing
@@ -383,7 +383,7 @@ variables:
     {% if enable_maintenance_mode and maintenance_entity %}
       {{ is_state(maintenance_entity, 'on') }}
     {% else %}
-      false
+      {{ false }}
     {% endif %}
 
   # Severity configuration
@@ -549,7 +549,7 @@ action:
           {% elif condition_type == 'not_equal' %}
             {{ current_value != threshold }}
           {% else %}
-            false
+            {{ false }}
           {% endif %}
 
       - repeat:
