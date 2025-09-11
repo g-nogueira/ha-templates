@@ -36,6 +36,7 @@ trigger:
     above: !input threshold_value
 
 variables:
+  notify_devices: !input notify_devices
   notify_names: >-
     {% if notify_devices %}
       {% set ns = namespace(names=[]) %}
@@ -47,7 +48,7 @@ variables:
     {% else %}
       []
     {% endif %}
-
+  
 action:
   - service: logbook.log
     data:
