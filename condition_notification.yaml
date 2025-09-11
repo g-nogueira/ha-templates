@@ -38,12 +38,12 @@ trigger:
 variables:
   notify_names: >-
     {% if notify_devices %}
-      {% set names = [] %}
+      {% set ns = namespace(names=[]) %}
       {% for device in notify_devices %}
         {% set name = device_attr(device, 'name') | lower | regex_replace('[^a-z0-9]', '_') %}
-        {% set names = names + ['mobile_app_' ~ name] %}
+        {% set ns.names = ns.names + ['mobile_app_' ~ name] %}
       {% endfor %}
-      {{ names }}
+      {{ ns.names }}
     {% else %}
       []
     {% endif %}
