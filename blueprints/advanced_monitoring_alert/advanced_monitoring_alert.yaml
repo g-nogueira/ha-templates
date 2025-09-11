@@ -315,7 +315,8 @@ variables:
 
   # Check if helper exists and warn if acknowledgements are enabled but helper is missing
   helper_exists: >-
-    {{ states(acknowledgement_helper) not in ['unknown', 'unavailable'] }}
+    {% set helper_state = states(acknowledgement_helper) %}
+    {{ helper_state not in ['unknown', 'unavailable'] and acknowledgement_helper != '' }}
 
   # Determine if current state triggers an alarm
   is_alarm_condition: >-
@@ -419,6 +420,26 @@ condition:
 
 # === ACTIONS ===
 action:
+  # Check if acknowledgements are enabled but helper is missing (check immediately)
+  - if:
+      - condition: template
+        value_template: "{{ enable_acknowledgements and not helper_exists }}"
+    then:
+      - service: persistent_notification.create
+        data:
+          title: "⚠️ Acknowledgement Helper Missing"
+          message: |
+            Alarm "{{ alarm_name }}" has acknowledgements enabled but the helper "{{ acknowledgement_helper }}" was not found.
+            
+            Please create the helper:
+            Settings → Devices & Services → Helpers → Create Helper → Text
+            Name: global_alarm_acknowledgements
+            Max length: 8192
+            Initial value: {}
+            
+            Or disable acknowledgements for this alarm.
+          notification_id: "missing_ack_helper_{{ alarm_name | slugify }}"
+
   # Log the alarm event
   - service: logbook.log
     data:
@@ -456,26 +477,6 @@ action:
       - condition: template
         value_template: "{{ primary_notify_names | length > 0 and is_alert_state }}"
     then:
-      # Check if acknowledgements are enabled but helper is missing
-      - if:
-          - condition: template
-            value_template: "{{ enable_acknowledgements and not helper_exists }}"
-        then:
-          - service: persistent_notification.create
-            data:
-              title: "⚠️ Acknowledgement Helper Missing"
-              message: |
-                Alarm "{{ alarm_name }}" has acknowledgements enabled but the helper "{{ acknowledgement_helper }}" was not found.
-                
-                Please create the helper:
-                Settings → Devices & Services → Helpers → Create Helper → Text
-                Name: global_alarm_acknowledgements
-                Max length: 8192
-                Initial value: {}
-                
-                Or disable acknowledgements for this alarm.
-              notification_id: "missing_ack_helper_{{ alarm_name | slugify }}"
-
       - repeat:
           for_each: "{{ primary_notify_names }}"
           sequence:
