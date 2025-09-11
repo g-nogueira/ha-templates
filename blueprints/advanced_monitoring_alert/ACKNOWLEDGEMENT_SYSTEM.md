@@ -197,6 +197,41 @@ use_blueprint:
 - Check for persistent notifications about missing helper
 - Review automation traces for acknowledgement logic
 
+### **Mobile App Service Errors**
+
+If you see errors like `"Action notify.mobile_app_xyz not found"`:
+
+#### Check Device Name Resolution:
+```yaml
+# In Developer Tools → Templates, test with your device_id:
+{% set device_id = "YOUR_DEVICE_ID_HERE" %}
+{% set device_name = device_attr(device_id, 'name') %}
+{% set clean_name = device_name | lower | regex_replace('[^a-z0-9]', '_') %}
+Device Name: {{ device_name }}
+Service Name: mobile_app_{{ clean_name }}
+```
+
+#### Find Your Mobile App Service:
+```yaml
+# List all mobile app services in Developer Tools → Templates:
+{% for entity in states.notify %}
+  {% if entity.entity_id.startswith('notify.mobile_app_') %}
+    - {{ entity.entity_id }}
+  {% endif %}
+{% endfor %}
+```
+
+#### Common Issues:
+- **Device name mismatch**: Home Assistant may clean device names differently
+- **Service not registered**: Mobile app might not be fully configured
+- **Device ID vs Service name**: These are different identifiers
+
+#### Solution:
+1. Enable logging in Global Handler to see debug info
+2. Check logbook for "Acknowledgement Debug" entries
+3. Compare resolved service name with actual available services
+4. Adjust device naming in mobile app if needed
+
 ### **Helper Overflow**
 
 If the helper reaches the 255 character limit:

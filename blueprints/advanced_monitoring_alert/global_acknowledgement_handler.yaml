@@ -44,8 +44,38 @@ variables:
   alarm_id: "{{ trigger.event.data.action }}"
   device_id: "{{ trigger.event.data.device_id | default('unknown') }}"
   notification_tag: "{{ trigger.event.data.tag | default('') }}"
+  
+  # Convert device_id to mobile app service name
+  mobile_app_service: >-
+    {% if device_id != 'unknown' %}
+      {% set device_name = device_attr(device_id, 'name') %}
+      {% if device_name %}
+        {% set clean_name = device_name | lower | regex_replace('[^a-z0-9]', '_') %}
+        mobile_app_{{ clean_name }}
+      {% else %}
+        unknown
+      {% endif %}
+    {% else %}
+      unknown
+    {% endif %}
 
 action:
+  # Debug: Log the incoming event data
+  - if:
+      - condition: template
+        value_template: "{{ enable_acknowledgement_logging }}"
+    then:
+      - service: logbook.log
+        data:
+          name: "Acknowledgement Debug"
+          message: |
+            Received acknowledgement event:
+            - Action ID: {{ alarm_id }}
+            - Device ID: {{ device_id }}
+            - Tag: {{ notification_tag }}
+            - Resolved Service: {{ mobile_app_service }}
+          entity_id: "{{ acknowledgement_helper }}"
+
   # Check if helper exists and warn if not
   - if:
       - condition: template
@@ -90,13 +120,14 @@ action:
   # Clear the notification that was acknowledged
   - if:
       - condition: template
-        value_template: "{{ enable_notification_clearing and device_id != 'unknown' and notification_tag != '' }}"
+        value_template: "{{ enable_notification_clearing and mobile_app_service != 'unknown' and notification_tag != '' }}"
     then:
-      - service: "notify.mobile_app_{{ device_id }}"
+      - service: "notify.{{ mobile_app_service }}"
         data:
           message: "clear_notification"
           data:
             tag: "{{ notification_tag }}"
+        continue_on_error: true
 
   # Log the acknowledgement
   - if:
@@ -106,7 +137,7 @@ action:
       - service: logbook.log
         data:
           name: "Alarm Acknowledged"
-          message: "{{ alarm_id }} acknowledged via {{ device_id }}"
+          message: "{{ alarm_id }} acknowledged via {{ mobile_app_service }} (device: {{ device_id }})"
           entity_id: "{{ acknowledgement_helper }}"
 
   # Clear any persistent notifications about missing helper
