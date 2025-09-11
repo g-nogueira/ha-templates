@@ -1,46 +1,294 @@
 blueprint:
-  name: Condition-Based Device Notification
-  description: Send a notification to mobile devices when a specified condition is met
+  name: Advanced Condition-Based Monitoring Alert
+  description: |
+    Enterprise-grade monitoring blueprint with configurable thresholds, escalation policies, 
+    and notification channels similar to Azure Monitor or AWS CloudWatch alarms.
   domain: automation
   input:
-    monitored_sensor:
-      name: Sensor to Monitor
-      description: Select the sensor you want to monitor
+    # === MONITORING CONFIGURATION ===
+    monitored_entity:
+      name: Entity to Monitor
+      description: Select the entity (sensor, binary_sensor, etc.) to monitor
       selector:
         entity:
-          domain: sensor
+    
+    alarm_name:
+      name: Alarm Name
+      description: Human-readable name for this alarm
+      default: "Sensor Alert"
+      selector:
+        text:
+
+    # === CONDITION CONFIGURATION ===
+    condition_type:
+      name: Condition Type
+      description: Type of condition to evaluate
+      default: "above"
+      selector:
+        select:
+          options:
+            - label: "Above threshold"
+              value: "above"
+            - label: "Below threshold" 
+              value: "below"
+            - label: "Between values"
+              value: "between"
+            - label: "Outside range"
+              value: "outside"
+            - label: "Equal to value"
+              value: "equal"
+            - label: "Not equal to value"
+              value: "not_equal"
+            - label: "Changed"
+              value: "changed"
+
     threshold_value:
       name: Threshold Value
-      description: The value that triggers the notification
+      description: Primary threshold value for comparison
       selector:
         number:
           mode: box
-          step: 0.1
-    notify_devices:
-      name: Notification Devices
-      description: Select which mobile devices to notify
+          step: 0.01
+          
+    threshold_value_high:
+      name: High Threshold (for range conditions)
+      description: Upper threshold for between/outside range conditions
+      default: 100
+      selector:
+        number:
+          mode: box
+          step: 0.01
+
+    # === EVALUATION CONFIGURATION ===
+    evaluation_period:
+      name: Evaluation Period (minutes)
+      description: How long condition must persist before triggering (0 = immediate)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+          mode: slider
+          unit_of_measurement: "min"
+
+    datapoints_to_alarm:
+      name: Datapoints to Alarm
+      description: Number of evaluation periods that must breach threshold
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          mode: slider
+
+    # === SEVERITY AND ESCALATION ===
+    severity_level:
+      name: Severity Level
+      description: Alert severity level
+      default: "medium"
+      selector:
+        select:
+          options:
+            - label: "Critical"
+              value: "critical"
+            - label: "High"
+              value: "high"
+            - label: "Medium"
+              value: "medium"
+            - label: "Low" 
+              value: "low"
+            - label: "Info"
+              value: "info"
+
+    enable_escalation:
+      name: Enable Escalation
+      description: Escalate to additional contacts if not acknowledged
+      default: false
+      selector:
+        boolean:
+
+    escalation_delay:
+      name: Escalation Delay (minutes)
+      description: Time to wait before escalating
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 120
+          step: 5
+          mode: slider
+          unit_of_measurement: "min"
+
+    # === NOTIFICATION CONFIGURATION ===
+    primary_notify_devices:
+      name: Primary Notification Devices
+      description: Primary mobile devices to notify immediately
       selector:
         device:
           integration: mobile_app
           multiple: true
+
+    escalation_notify_devices:
+      name: Escalation Notification Devices
+      description: Additional devices to notify during escalation
+      default: []
+      selector:
+        device:
+          integration: mobile_app
+          multiple: true
+
+    notification_services:
+      name: Additional Notification Services
+      description: Other notification services (email, Slack, etc.)
+      default: []
+      selector:
+        entity:
+          domain: notify
+          multiple: true
+
+    # === NOTIFICATION CONTENT ===
+    notification_title:
+      name: Notification Title
+      description: Alert title template
+      default: "🚨 {{ alarm_name }} Alert"
+      selector:
+        text:
+
     notification_message:
       name: Notification Message
-      description: Message to send when condition is met
+      description: Alert message template (supports templates)
+      default: |
+        {{ monitored_entity }} is {{ trigger.to_state.state }} {{ trigger.to_state.attributes.unit_of_measurement or '' }}
+        Threshold: {{ condition_type }} {{ threshold_value }}
+        Time: {{ now().strftime('%Y-%m-%d %H:%M:%S') }}
       selector:
         text:
           multiline: true
 
-trigger:
-  - platform: numeric_state
-    entity_id: !input monitored_sensor
-    above: !input threshold_value
+    # === ADVANCED OPTIONS ===
+    enable_ok_notifications:
+      name: Send OK Notifications
+      description: Send notification when condition returns to normal
+      default: true
+      selector:
+        boolean:
 
+    enable_metrics_collection:
+      name: Enable Metrics Collection
+      description: Log metrics for analysis and dashboards
+      default: false
+      selector:
+        boolean:
+
+    custom_tags:
+      name: Custom Tags
+      description: Custom key-value pairs for categorization (JSON format)
+      default: "{}"
+      selector:
+        text:
+
+    # === MAINTENANCE WINDOWS ===
+    enable_maintenance_mode:
+      name: Enable Maintenance Windows
+      description: Support for maintenance windows to suppress alerts
+      default: false
+      selector:
+        boolean:
+
+    maintenance_entity:
+      name: Maintenance Mode Entity
+      description: Input boolean to control maintenance mode
+      default: ""
+      selector:
+        entity:
+          domain: input_boolean
+
+# === TRIGGER CONFIGURATION ===
+trigger:
+  - platform: template
+    value_template: >-
+      {% set current_value = states(monitored_entity) | float(0) %}
+      {% set threshold = threshold_value | float(0) %}
+      {% set threshold_high = threshold_value_high | float(0) %}
+      {% set condition = condition_type %}
+      
+      {% if condition == 'above' %}
+        {{ current_value > threshold }}
+      {% elif condition == 'below' %}
+        {{ current_value < threshold }}
+      {% elif condition == 'between' %}
+        {{ threshold <= current_value <= threshold_high }}
+      {% elif condition == 'outside' %}
+        {{ current_value < threshold or current_value > threshold_high }}
+      {% elif condition == 'equal' %}
+        {{ current_value == threshold }}
+      {% elif condition == 'not_equal' %}
+        {{ current_value != threshold }}
+      {% elif condition == 'changed' %}
+        {{ trigger.to_state.state != trigger.from_state.state }}
+      {% else %}
+        false
+      {% endif %}
+    for:
+      minutes: !input evaluation_period
+
+  # OK notification trigger
+  - platform: template
+    value_template: >-
+      {% if enable_ok_notifications %}
+        {% set current_value = states(monitored_entity) | float(0) %}
+        {% set threshold = threshold_value | float(0) %}
+        {% set threshold_high = threshold_value_high | float(0) %}
+        {% set condition = condition_type %}
+        
+        {% if condition == 'above' %}
+          {{ current_value <= threshold }}
+        {% elif condition == 'below' %}
+          {{ current_value >= threshold }}
+        {% elif condition == 'between' %}
+          {{ current_value < threshold or current_value > threshold_high }}
+        {% elif condition == 'outside' %}
+          {{ threshold <= current_value <= threshold_high }}
+        {% elif condition == 'equal' %}
+          {{ current_value != threshold }}
+        {% elif condition == 'not_equal' %}
+          {{ current_value == threshold }}
+        {% else %}
+          false
+        {% endif %}
+      {% else %}
+        false
+      {% endif %}
+    id: ok_trigger
+
+# === VARIABLES ===
 variables:
-  notify_devices: !input notify_devices
-  notify_names: >-
-    {% if notify_devices %}
+  monitored_entity: !input monitored_entity
+  alarm_name: !input alarm_name
+  condition_type: !input condition_type
+  threshold_value: !input threshold_value
+  threshold_value_high: !input threshold_value_high
+  severity_level: !input severity_level
+  enable_escalation: !input enable_escalation
+  escalation_delay: !input escalation_delay
+  primary_devices: !input primary_notify_devices
+  escalation_devices: !input escalation_notify_devices
+  notification_services: !input notification_services
+  notification_title: !input notification_title
+  notification_message: !input notification_message
+  enable_ok_notifications: !input enable_ok_notifications
+  enable_metrics_collection: !input enable_metrics_collection
+  custom_tags: !input custom_tags
+  enable_maintenance_mode: !input enable_maintenance_mode
+  maintenance_entity: !input maintenance_entity
+  
+  # Process device names for mobile notifications
+  primary_notify_names: >-
+    {% if primary_devices %}
       {% set ns = namespace(names=[]) %}
-      {% for device in notify_devices %}
+      {% for device in primary_devices %}
         {% set name = device_attr(device, 'name') | lower | regex_replace('[^a-z0-9]', '_') %}
         {% set ns.names = ns.names + ['mobile_app_' ~ name] %}
       {% endfor %}
@@ -48,27 +296,175 @@ variables:
     {% else %}
       []
     {% endif %}
+
+  escalation_notify_names: >-
+    {% if escalation_devices %}
+      {% set ns = namespace(names=[]) %}
+      {% for device in escalation_devices %}
+        {% set name = device_attr(device, 'name') | lower | regex_replace('[^a-z0-9]', '_') %}
+        {% set ns.names = ns.names + ['mobile_app_' ~ name] %}
+      {% endfor %}
+      {{ ns.names }}
+    {% else %}
+      []
+    {% endif %}
+
+  # Determine alert state
+  is_alert_state: >-
+    {{ trigger.id != 'ok_trigger' }}
   
+  # Check maintenance mode
+  in_maintenance: >-
+    {% if enable_maintenance_mode and maintenance_entity %}
+      {{ is_state(maintenance_entity, 'on') }}
+    {% else %}
+      false
+    {% endif %}
+
+  # Severity configuration
+  severity_config: >-
+    {% set config = {
+      'critical': {'priority': 'high', 'importance': 'high', 'icon': '🔴', 'ttl': 0},
+      'high': {'priority': 'high', 'importance': 'high', 'icon': '🟠', 'ttl': 300},
+      'medium': {'priority': 'normal', 'importance': 'default', 'icon': '🟡', 'ttl': 600},
+      'low': {'priority': 'normal', 'importance': 'low', 'icon': '🔵', 'ttl': 1800},
+      'info': {'priority': 'min', 'importance': 'min', 'icon': '⚪', 'ttl': 3600}
+    } %}
+    {{ config[severity_level] }}
+
+  # Parse custom tags
+  parsed_tags: >-
+    {% set tags = {} %}
+    {% if custom_tags and custom_tags != '{}' %}
+      {% set tags = custom_tags | from_json %}
+    {% endif %}
+    {{ tags }}
+
+# === CONDITION ===
+condition:
+  - condition: template
+    value_template: "{{ not in_maintenance }}"
+
+# === ACTIONS ===
 action:
+  # Log the alarm event
   - service: logbook.log
     data:
-      name: "Debug Info"
-      message: "Notify devices: {{ notify_devices }}, Generated names: {{ notify_names }}"
+      name: "{{ alarm_name }}"
+      message: >-
+        {% if is_alert_state %}
+          🚨 ALARM: {{ monitored_entity }} triggered {{ condition_type }} {{ threshold_value }}. 
+          Current value: {{ states(monitored_entity) }}. Severity: {{ severity_level | upper }}
+        {% else %}
+          ✅ OK: {{ monitored_entity }} returned to normal. Current value: {{ states(monitored_entity) }}
+        {% endif %}
+      entity_id: "{{ monitored_entity }}"
 
-  - repeat:
-      for_each: "{{ notify_names }}"
-      sequence:
-        - service: logbook.log
-          data:
-            name: "Attempting notification"
-            message: "Trying to notify service: notify.{{ repeat.item }}"
-            
-        - service: "notify.{{ repeat.item }}"
-          data:
-            title: "Sensor Alert"
-            message: !input notification_message
-            data:
-              priority: high
-              ttl: 0
-              importance: high
-              channel: sensor_alerts
+  # Collect metrics if enabled
+  - if:
+      - condition: template
+        value_template: "{{ enable_metrics_collection }}"
+    then:
+      - event: alarm_metrics
+        event_data:
+          alarm_name: "{{ alarm_name }}"
+          entity: "{{ monitored_entity }}"
+          severity: "{{ severity_level }}"
+          condition_type: "{{ condition_type }}"
+          threshold: "{{ threshold_value }}"
+          current_value: "{{ states(monitored_entity) }}"
+          state: "{{ 'ALARM' if is_alert_state else 'OK' }}"
+          timestamp: "{{ now().isoformat() }}"
+          tags: "{{ parsed_tags }}"
+
+  # Primary notifications (immediate)
+  - if:
+      - condition: template
+        value_template: "{{ primary_notify_names | length > 0 }}"
+    then:
+      - repeat:
+          for_each: "{{ primary_notify_names }}"
+          sequence:
+            - service: "notify.{{ repeat.item }}"
+              data:
+                title: >-
+                  {{ severity_config.icon }} {{ notification_title }}
+                message: "{{ notification_message }}"
+                data:
+                  priority: "{{ severity_config.priority }}"
+                  ttl: "{{ severity_config.ttl }}"
+                  importance: "{{ severity_config.importance }}"
+                  channel: "alarm_{{ severity_level }}"
+                  tag: "{{ alarm_name | slugify }}"
+                  actions:
+                    - action: "acknowledge_{{ alarm_name | slugify }}"
+                      title: "Acknowledge"
+                    - action: "snooze_{{ alarm_name | slugify }}"
+                      title: "Snooze 30m"
+
+  # Additional notification services
+  - if:
+      - condition: template
+        value_template: "{{ notification_services | length > 0 }}"
+    then:
+      - repeat:
+          for_each: "{{ notification_services }}"
+          sequence:
+            - service: "notify.{{ repeat.item.split('.')[1] }}"
+              data:
+                title: "{{ notification_title }}"
+                message: "{{ notification_message }}"
+
+  # Escalation notifications (delayed)
+  - if:
+      - condition: and
+        conditions:
+          - condition: template
+            value_template: "{{ enable_escalation and is_alert_state }}"
+          - condition: template
+            value_template: "{{ escalation_notify_names | length > 0 }}"
+    then:
+      - delay:
+          minutes: "{{ escalation_delay }}"
+      
+      # Check if alarm is still active and not acknowledged
+      - condition: template
+        value_template: >-
+          {% set current_value = states(monitored_entity) | float(0) %}
+          {% set threshold = threshold_value | float(0) %}
+          {% set threshold_high = threshold_value_high | float(0) %}
+          
+          {% if condition_type == 'above' %}
+            {{ current_value > threshold }}
+          {% elif condition_type == 'below' %}
+            {{ current_value < threshold }}
+          {% elif condition_type == 'between' %}
+            {{ threshold <= current_value <= threshold_high }}
+          {% elif condition_type == 'outside' %}
+            {{ current_value < threshold or current_value > threshold_high }}
+          {% elif condition_type == 'equal' %}
+            {{ current_value == threshold }}
+          {% elif condition_type == 'not_equal' %}
+            {{ current_value != threshold }}
+          {% else %}
+            false
+          {% endif %}
+
+      - repeat:
+          for_each: "{{ escalation_notify_names }}"
+          sequence:
+            - service: "notify.{{ repeat.item }}"
+              data:
+                title: "🔥 ESCALATED: {{ notification_title }}"
+                message: |
+                  ⚠️ This is an escalated alert that was not acknowledged.
+                  
+                  {{ notification_message }}
+                  
+                  Original alert time: {{ (now() - timedelta(minutes=escalation_delay)).strftime('%H:%M:%S') }}
+                data:
+                  priority: "high"
+                  ttl: 0
+                  importance: "high" 
+                  channel: "escalation"
+                  tag: "escalation_{{ alarm_name | slugify }}"
