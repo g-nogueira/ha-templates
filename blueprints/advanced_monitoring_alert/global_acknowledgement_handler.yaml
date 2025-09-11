@@ -1,0 +1,119 @@
+blueprint:
+  name: Global Alarm Acknowledgement Handler
+  description: |
+    System-wide acknowledgement handler for all alarm blueprints. 
+    Install this ONCE to enable acknowledgeable notifications across all your alarm automations.
+    
+    Prerequisites:
+    - Create input_text.global_alarm_acknowledgements helper (see documentation)
+  domain: automation
+  input:
+    acknowledgement_helper:
+      name: Global Acknowledgement Helper
+      description: The input_text helper that stores acknowledgement state (input_text.global_alarm_acknowledgements)
+      selector:
+        entity:
+          domain: input_text
+    
+    enable_notification_clearing:
+      name: Clear Acknowledged Notifications
+      description: Automatically clear notifications when acknowledged
+      default: true
+      selector:
+        boolean:
+    
+    enable_acknowledgement_logging:
+      name: Log Acknowledgements
+      description: Log acknowledgement events to Home Assistant logbook
+      default: true
+      selector:
+        boolean:
+
+trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+
+condition:
+  - condition: template
+    value_template: "{{ trigger.event.data.action.startswith('ack_') }}"
+
+variables:
+  acknowledgement_helper: !input acknowledgement_helper
+  enable_notification_clearing: !input enable_notification_clearing
+  enable_acknowledgement_logging: !input enable_acknowledgement_logging
+  alarm_id: "{{ trigger.event.data.action }}"
+  device_id: "{{ trigger.event.data.device_id | default('unknown') }}"
+  notification_tag: "{{ trigger.event.data.tag | default('') }}"
+
+action:
+  # Check if helper exists and warn if not
+  - if:
+      - condition: template
+        value_template: "{{ states(acknowledgement_helper) == 'unknown' }}"
+    then:
+      - service: persistent_notification.create
+        data:
+          title: "⚠️ Acknowledgement Helper Missing"
+          message: |
+            The global acknowledgement helper "{{ acknowledgement_helper }}" was not found.
+            
+            Please create an input_text helper named "global_alarm_acknowledgements" in:
+            Settings → Devices & Services → Helpers → Create Helper → Text
+            
+            Max length: 8192 characters
+            Initial value: {}
+          notification_id: "missing_ack_helper"
+      - stop: "Acknowledgement helper not found"
+
+  # Store acknowledgement in global helper
+  - service: input_text.set_value
+    target:
+      entity_id: "{{ acknowledgement_helper }}"
+    data:
+      value: >-
+        {% set current_json = states(acknowledgement_helper) %}
+        {% if current_json in ['unknown', 'unavailable', ''] %}
+          {% set current = {} %}
+        {% else %}
+          {% set current = current_json | from_json %}
+        {% endif %}
+        
+        {% set ack_data = {
+          'timestamp': now().isoformat(),
+          'device': device_id,
+          'tag': notification_tag,
+          'automation': this.entity_id
+        } %}
+        {% set updated = dict(current, **{alarm_id: ack_data}) %}
+        {{ updated | to_json }}
+
+  # Clear the notification that was acknowledged
+  - if:
+      - condition: template
+        value_template: "{{ enable_notification_clearing and device_id != 'unknown' and notification_tag != '' }}"
+    then:
+      - service: "notify.mobile_app_{{ device_id }}"
+        data:
+          message: "clear_notification"
+          data:
+            tag: "{{ notification_tag }}"
+
+  # Log the acknowledgement
+  - if:
+      - condition: template
+        value_template: "{{ enable_acknowledgement_logging }}"
+    then:
+      - service: logbook.log
+        data:
+          name: "Alarm Acknowledged"
+          message: "{{ alarm_id }} acknowledged via {{ device_id }}"
+          entity_id: "{{ acknowledgement_helper }}"
+
+  # Clear any persistent notifications about missing helper
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: "missing_ack_helper"
+    continue_on_error: true
+
+mode: queued
+max: 50

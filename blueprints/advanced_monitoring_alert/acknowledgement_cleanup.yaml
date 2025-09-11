@@ -1,0 +1,97 @@
+blueprint:
+  name: Alarm Acknowledgement Cleanup
+  description: |
+    Periodic cleanup of old alarm acknowledgements to prevent helper overflow.
+    Install this ONCE to automatically clean up expired acknowledgements.
+    
+    Prerequisites:
+    - Global Alarm Acknowledgement Handler blueprint installed
+    - input_text.global_alarm_acknowledgements helper created
+  domain: automation
+  input:
+    acknowledgement_helper:
+      name: Global Acknowledgement Helper
+      description: The input_text helper that stores acknowledgement state
+      selector:
+        entity:
+          domain: input_text
+    
+    cleanup_schedule:
+      name: Cleanup Schedule
+      description: When to run the cleanup (daily recommended)
+      default: "02:00:00"
+      selector:
+        time:
+    
+    retention_days:
+      name: Retention Period (days)
+      description: How many days to keep acknowledgement history
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
+          mode: slider
+          unit_of_measurement: "days"
+
+trigger:
+  - platform: time
+    at: !input cleanup_schedule
+
+variables:
+  acknowledgement_helper: !input acknowledgement_helper
+  retention_days: !input retention_days
+
+action:
+  # Check if helper exists
+  - if:
+      - condition: template
+        value_template: "{{ states(acknowledgement_helper) == 'unknown' }}"
+    then:
+      - service: persistent_notification.create
+        data:
+          title: "⚠️ Cleanup Failed: Helper Missing"
+          message: |
+            Cannot clean up acknowledgements - helper "{{ acknowledgement_helper }}" not found.
+            Please create the input_text helper or disable this automation.
+          notification_id: "cleanup_failed_missing_helper"
+      - stop: "Helper not found"
+
+  # Perform cleanup
+  - service: input_text.set_value
+    target:
+      entity_id: "{{ acknowledgement_helper }}"
+    data:
+      value: >-
+        {% set current_json = states(acknowledgement_helper) %}
+        {% if current_json in ['unknown', 'unavailable', ''] %}
+          {% set current = {} %}
+        {% else %}
+          {% set current = current_json | from_json %}
+        {% endif %}
+        
+        {% set cutoff = (now() - timedelta(days=retention_days)).isoformat() %}
+        {% set filtered = {} %}
+        {% set removed_count = 0 %}
+        
+        {% for alarm_id, ack_data in current.items() %}
+          {% if ack_data.timestamp > cutoff %}
+            {% set filtered = dict(filtered, **{alarm_id: ack_data}) %}
+          {% else %}
+            {% set removed_count = removed_count + 1 %}
+          {% endif %}
+        {% endfor %}
+        
+        {{ filtered | to_json }}
+
+  # Log cleanup results
+  - service: logbook.log
+    data:
+      name: "Acknowledgement Cleanup"
+      message: >-
+        Cleaned up acknowledgements older than {{ retention_days }} days.
+        Total acknowledgements: {{ states(acknowledgement_helper) | from_json | length }}
+      entity_id: "{{ acknowledgement_helper }}"
+
+mode: single
